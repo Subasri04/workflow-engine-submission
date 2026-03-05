@@ -1,13 +1,14 @@
 import Workflow from "../models/workflow.model";
-import Step from "../models/step.model";
+import Step, { IStep } from "../models/step.model";
 import Execution from "../models/execution.model";
 import { evaluateRules } from "../utils/ruleEngine";
+import mongoose from "mongoose";
 
-const MAX_ITERATIONS = 20;
+const MAX_ITERATIONS = 50;
 
 export async function startExecution(
   workflowId: string,
-  data: Record<string, unknown>
+  data: Record<string, any>
 ) {
   const workflow = await Workflow.findById(workflowId);
 
@@ -27,16 +28,18 @@ export async function startExecution(
     workflow_id: workflow._id,
     workflow_version: workflow.version,
     status: "running",
-    started_at: new Date(),
     data,
     logs: [],
-    current_step_id: firstStep._id
+    current_step_id: firstStep._id,
+    started_at: new Date(),
+    retries: 0
   });
 
-  let currentStep = firstStep;
-  let iteration = 0;
+  let currentStep: IStep | null = firstStep;
+  let iterationCount = 0;
 
-  while (currentStep && iteration < MAX_ITERATIONS) {
+  while (currentStep && iterationCount < MAX_ITERATIONS) {
+    iterationCount++;
 
     const ruleResult = await evaluateRules(
       currentStep._id.toString(),
@@ -51,24 +54,30 @@ export async function startExecution(
     });
 
     if (!ruleResult.nextStepId) {
+      execution.current_step_id = null;
       break;
     }
 
-    currentStep = await Step.findById(ruleResult.nextStepId);
-    execution.current_step_id = currentStep?._id ?? null;
+    const nextStep = await Step.findById(
+      new mongoose.Types.ObjectId(ruleResult.nextStepId)
+    );
 
-    iteration++;
+    if (!nextStep) {
+      execution.current_step_id = null;
+      break;
+    }
+
+    execution.current_step_id = nextStep._id;
+    currentStep = nextStep;
   }
 
-  if (iteration >= MAX_ITERATIONS) {
+  if (iterationCount >= MAX_ITERATIONS) {
     execution.status = "failed";
   } else {
     execution.status = "completed";
   }
 
   execution.ended_at = new Date();
-  execution.current_step_id = null;
-
   await execution.save();
 
   return execution;

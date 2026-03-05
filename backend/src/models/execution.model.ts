@@ -12,6 +12,7 @@ export interface IStepLog {
     rule_logs?: IRuleLog[];
     system?: boolean;
     message?: string;
+    error?: string;
     timestamp?: Date;
 }
 

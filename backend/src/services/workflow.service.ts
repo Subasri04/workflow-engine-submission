@@ -1,5 +1,4 @@
 import Workflow from "../models/workflow.model";
-import WorkflowModel, { IWorkflow } from "../models/workflow.model"
 
 interface CreateWorkflowInput {
     name: string
@@ -10,24 +9,20 @@ interface CreateWorkflowInput {
     }>
 }
 
-export const createWorkflow = async (
-    payload: CreateWorkflowInput
-): Promise<IWorkflow> => {
+export async function createWorkflow(data: {
+  name: string;
+  description?: string;
+  input_schema: Record<string, unknown>;
+}) {
+  const workflow = await Workflow.create({
+    name: data.name,
+    description: data.description,
+    input_schema: data.input_schema,
+    version: 1,
+    is_active: true
+  });
 
-    const latestWorkflow = await WorkflowModel
-        .findOne({ name: payload.name })
-        .sort({ version: -1 })
-
-    const version = latestWorkflow ? latestWorkflow.version + 1 : 1
-
-    const workflow = await WorkflowModel.create({
-        name: payload.name,
-        version,
-        input_schema: payload.input_schema,
-        is_active: true
-    })
-
-    return workflow
+  return workflow;
 }
 
 export async function getWorkflows() {
